@@ -106,3 +106,6 @@ class Roulette(PaletteAggregate):
                 self[name] = colors[0][0]
             elif method == self.REDUCTION_METHODS.MAX_DISTANCE:
                 self[name] = colors[-1][0]
+
+    def render_template(self, filename, destination=None):
+        return render_template(filename, destination, named_data=self)
