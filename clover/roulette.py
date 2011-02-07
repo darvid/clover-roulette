@@ -15,12 +15,11 @@ __version__ = "0.0.1"
 
 
 DEFAULT_FILTERS = [
-    #: Ignore colors with extreme variations in saturation.
-    lambda color, palette:
-        abs(palette.average_saturation - color.saturation) <= 50,
-    #: Ignore extremely bright colors.
-    lambda color, palette:
-        color.saturation > 90 and color.value > 90
+    lambda target, color, palette:
+        color.saturation < 70,
+    lambda target, color, palette:
+        (target[1] != (0, 0, 0) and (color.value > 50 and
+         color.saturation > 50) or color.lightness < 10)
 ]
 
 
@@ -50,9 +49,10 @@ class Roulette(PaletteAggregate):
 
     def run(self, reduce_palette=True):
         """Attempts to fill this :class:`PaletteAggregate`."""
-        while not self.complete:
-            self.randomize and self.add_palette(clover.Palette.from_random())
-            if len(self.palettes) == self.max_palettes: break
+        while self.randomize and not self.complete:
+            self.add_palette(clover.Palette.from_random())
+            if len(self.palettes) == self.max_palettes:
+                break
         if not self.complete:
             self.fill_missing_colors()
             reduce_palette and self.reduce_palette()
@@ -63,8 +63,8 @@ class Roulette(PaletteAggregate):
         and the sum and difference of the default hue and average hue
         difference (between adjacent colors).
         """
-        assert len(self) > 2, "Need at least 2 colors in palette to continue"
-        hue_diff = self.get_average_difference("hue")
+        assert len(self) >= 2, "Need at least 2 colors in palette to continue"
+        hue_diff = self.get_average_difference_from_target("hue")
         avg_saturation, avg_value = map(
             self.get_average_value,
             ("saturation", "value"))
@@ -75,16 +75,19 @@ class Roulette(PaletteAggregate):
 
             default_color = Color(*rgb)
             candidates = []
+
             if (default_color.hue - hue_diff) >= 0:
                 candidates.append(Color.from_hsv([
                     default_color.hue - hue_diff,
                     avg_saturation,
                     avg_value]))
-            if (default_color.hue + hue_diff) <= 255:
+            if (default_color.hue + hue_diff) <= 360:
                 candidates.append(Color.from_hsv([
                     default_color.hue + hue_diff,
                     avg_saturation,
                     avg_value]))
+            elif (default_color.hue + hue_diff) > 360:
+                print name, (default_color.hue - hue_diff) % 360
 
             self[name] = map(
                 lambda candidate:
@@ -97,7 +100,9 @@ class Roulette(PaletteAggregate):
         a single color.
         """
         for name, colors in self.sorted.items():
-            if len(colors) == 1:
+            if not colors:
+                continue
+            elif len(colors) == 1:
                 self[name] = colors[0][0]
                 continue
             if method == self.REDUCTION_METHODS.RANDOM:
